@@ -1,0 +1,8 @@
+{
+  "name": "Wishlist & Ideeënbank Beta",
+  "short_name": "Wishlist & Ideeënbank",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#d19a20"
+}
