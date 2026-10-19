@@ -1,14 +1,78 @@
-<!doctype html><html lang="nl"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#d19a20"><title>Wishlist & Ideeënbank Beta</title>
-<link rel="stylesheet" href="style.css"><link rel="manifest" href="manifest.webmanifest">
-</head><body><div class="app">
-<header><div><p class="eyebrow">Interactieve testversie</p><h1>💡 Wishlist & Ideeënbank Beta</h1></div><span class="badge">BÈTA</span></header>
-<div class="grid"><section class="card hero"><h2>Ideeën</h2><div class="value">64</div><div class="muted">opgeslagen</div></section><section class="card"><h2>Favorieten</h2><div class="value">12</div><div class="muted">gemarkeerd</div></section><section class="card"><h2>Samen doen</h2><div class="value">18</div><div class="muted">ideeën</div></section><section class="card"><h2>Geschat</h2><div class="value">€1.940</div><div class="muted">totaal</div></section>
-<section class="card wide"><div class="row"><h2>Ideeën per maand</h2><button class="btn soft" id="replayChart">↻ opnieuw</button></div><svg class="chart" viewBox="0 0 650 160" preserveAspectRatio="none"><polygon class="chart-area" points="14,146 14.0,146.0 117.7,110.0 221.3,74.0 325.0,98.0 428.7,38.0 532.3,62.0 636.0,14.0 636,146"></polygon><polyline class="chart-line" points="14.0,146.0 117.7,110.0 221.3,74.0 325.0,98.0 428.7,38.0 532.3,62.0 636.0,14.0"></polyline><circle class="dot" cx="14.0" cy="146.0" r="6" style="animation-delay:0.55s"></circle><circle class="dot" cx="117.7" cy="110.0" r="6" style="animation-delay:0.65s"></circle><circle class="dot" cx="221.3" cy="74.0" r="6" style="animation-delay:0.75s"></circle><circle class="dot" cx="325.0" cy="98.0" r="6" style="animation-delay:0.85s"></circle><circle class="dot" cx="428.7" cy="38.0" r="6" style="animation-delay:0.95s"></circle><circle class="dot" cx="532.3" cy="62.0" r="6" style="animation-delay:1.05s"></circle><circle class="dot" cx="636.0" cy="14.0" r="6" style="animation-delay:1.15s"></circle></svg></section>
-<section class="card side"><h2>Voortgang</h2><div class="ring" data-progress="72"><span>72%</span></div><p class="muted">Geanimeerde CSS-ring</p></section>
-<section class="card full"><div class="row"><h2>Specifieke demo</h2><span class="muted">Wishlist & Ideeënbank</span></div><div class="idea"><button class="heart">♡</button><div><strong>Weekendje weg</strong><div class="muted">Samen doen</div></div></div>
-<div class="idea"><button class="heart">♡</button><div><strong>Nieuwe koffiemolen</strong><div class="muted">Woning</div></div></div>
-<div class="idea"><button class="heart on">♥</button><div><strong>Japan ooit</strong><div class="muted">Reizen</div></div></div></section>
-<section class="card full"><h2>Animatie-speeltuin</h2><div class="demo-buttons"><button class="btn" id="confettiBtn">🎉 Confetti</button><button class="btn soft" id="cardsBtn">Kaarten opnieuw</button><button class="btn soft" id="ringsBtn">Ringen opnieuw</button></div></section>
-</div></div><div class="toast" id="toast"></div><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b5d3b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Coach O23">
+  <title>Football Coach</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css?v=2.7.6">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">FS</div>
+        <div><strong id="brandTeam">Full Speed O23</strong><span>Football Coach</span></div>
+      </div>
+      <nav class="side-nav" aria-label="Hoofdnavigatie">
+        <button class="nav-item active" data-page="dashboard">⌂ <span>Vandaag</span></button>
+        <button class="nav-item" data-page="players">♙ <span>Teams & spelers</span></button>
+        <button class="nav-item" data-page="attendance">✓ <span>Aanwezigheid</span></button>
+        <button class="nav-item" data-page="trainings">◫ <span>Trainingen</span></button>
+        <button class="nav-item" data-page="exercises">▦ <span>Oefeningen</span></button>
+        <button class="nav-item" data-page="matches">⚽ <span>Wedstrijden</span></button>
+        <button class="nav-item" data-page="tactics">↗ <span>Tactiekbord</span></button>
+        <button class="nav-item" data-page="gamemodel">◈ <span>Spelmodel</span></button>
+        <button class="nav-item" data-page="season">▣ <span>Seizoen</span></button>
+        <button class="nav-item" data-page="stats">▥ <span>Statistieken</span></button>
+        <button class="nav-item" data-page="notes">✎ <span>Coachnotities</span></button>
+        <button class="nav-item" data-page="knowledge">▤ <span>Kennisbank</span></button>
+        <button class="nav-item" data-page="documents">⌁ <span>Bronnen</span></button>
+        <button class="nav-item" data-page="assistant">✦ <span>Coachassistent</span></button>
+        <button class="nav-item" data-page="settings">⚙ <span>Instellingen</span></button>
+      </nav>
+      <div class="sidebar-foot"><span class="dot"></span><span id="saveStateLabel">Lokaal opgeslagen</span></div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div><p class="eyebrow" id="pageEyebrow">SEIZOEN 2026/2027</p><h1 id="pageTitle">Vandaag</h1></div>
+        <div class="top-actions"><span id="connectionState" class="connection-state online">● Online</span><button class="icon-btn" data-global-search title="Zoeken">⌕</button><button class="icon-btn" id="undoAction" data-undo-action title="Ongedaan maken" disabled>↶</button><select id="globalTeamSelect" class="team-select" aria-label="Actief team"></select><button class="icon-btn" id="quickAdd" title="Snel toevoegen">＋</button></div>
+      </header>
+      <section id="app" class="content"></section>
+    </main>
+  </div>
+
+  <nav class="bottom-nav" aria-label="Mobiele navigatie">
+    <button class="active" data-page="dashboard"><span>⌂</span><small>Vandaag</small></button>
+    <button data-page="players"><span>♙</span><small>Team</small></button>
+    <button data-page="matches"><span>⚽</span><small>Wedstrijden</small></button>
+    <button data-page="stats"><span>▥</span><small>Statistieken</small></button>
+    <button data-page="more"><span>•••</span><small>Meer</small></button>
+  </nav>
+
+  <dialog id="modal">
+    <form method="dialog" class="modal-card">
+      <div class="modal-head"><h2 id="modalTitle"></h2><button value="cancel" class="icon-btn">×</button></div>
+      <div id="modalBody"></div>
+      <div class="modal-actions"><button value="cancel" class="btn ghost">Annuleren</button><button id="modalSave" value="default" class="btn primary">Opslaan</button></div>
+    </form>
+  </dialog>
+  <input id="importFile" type="file" accept="application/json,.json" hidden>
+  <input id="knowledgeFile" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+  <input id="knowledgeFileBulk" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden>
+  <input id="docFile" type="file" accept=".pdf,.docx,.xlsx,.xlsm,.xls,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.12.2/mammoth.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script src="app.js?v=2.7.6"></script>
+</body>
+</html>
