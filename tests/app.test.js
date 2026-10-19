@@ -321,3 +321,34 @@ test('trainingssjablonen: presetDraft/customTemplateDraft/trainingTemplateInfo/t
   assert.strictEqual(r("customTemplateDraft('bestaat-niet').templateKey"),'free');
   assert.strictEqual(r("typeof openTrainingTemplateChooser+typeof saveTrainingAsTemplate+typeof deleteTrainingTemplate"),'functionfunctionfunction');
 });
+
+test('template opslaan: training blijft ongewijzigd, eigen template onderscheiden van standaard, annuleren/leeg doet niets',()=>{
+  const vm=require('vm'),a=createApp(),r=c=>vm.runInContext(c,a.sandbox);
+  const t=a.t.state.trainings[0],snap=JSON.stringify(a.t.state.trainings),n=a.t.state.trainings.length;
+  r("prompt=()=>null");r(`saveTrainingAsTemplate('${t.id}')`);
+  r("prompt=()=>'   '");r(`saveTrainingAsTemplate('${t.id}')`);
+  assert.strictEqual(r('state.templates.trainings.length'),0);
+  r("prompt=()=>' Mijn sjabloon '");r(`saveTrainingAsTemplate('${t.id}')`);
+  assert.strictEqual(r('state.templates.trainings.length'),1);
+  const tpl=r('state.templates.trainings[0]');
+  assert.strictEqual(tpl.name,'Mijn sjabloon');assert.strictEqual(tpl.templateKey,'custom');
+  assert.notStrictEqual(tpl.id,t.id);assert.ok(!('date' in tpl)&&!('attendance' in tpl));
+  assert.strictEqual(JSON.stringify(a.t.state.trainings),snap);
+  const d=r(`customTemplateDraft('${tpl.id}')`);
+  assert.strictEqual(d.templateKey,'custom');assert.strictEqual(d.templateName,'Mijn sjabloon');
+  assert.strictEqual(r("presetDraft('onbekend').templateKey"),'free');
+  assert.strictEqual(r("trainingTemplateMeta({templateKey:'toString'}).name"),'Vrije training');
+  r(`deleteTrainingTemplate('${tpl.id}')`);
+  assert.strictEqual(r('state.templates.trainings.length'),0);
+  assert.strictEqual(a.t.state.trainings.length,n);assert.strictEqual(JSON.stringify(a.t.state.trainings),snap);
+});
+test('template opslaan/verwijderen: opslagfout draait state terug',()=>{
+  const vm=require('vm'),a=createApp(),r=c=>vm.runInContext(c,a.sandbox);
+  const t=a.t.state.trainings[0];r("prompt=()=>'X'");
+  a.ls.failWrites=true;r(`saveTrainingAsTemplate('${t.id}')`);
+  assert.strictEqual(r('state.templates.trainings.length'),0);
+  a.ls.failWrites=false;r(`saveTrainingAsTemplate('${t.id}')`);
+  const id=r('state.templates.trainings[0].id');
+  a.ls.failWrites=true;r(`deleteTrainingTemplate('${id}')`);
+  assert.strictEqual(r('state.templates.trainings.length'),1);
+});
