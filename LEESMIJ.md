@@ -8,7 +8,7 @@ Statische app (`index.html`, `app.js`, `style.css`, `sw.js`). Lokale opslag: `fo
 
 ## Supabase
 Project `ckodnfshelblddfypmmv`. URL en **publishable** key staan op één plek bovenin `app.js` (`SYNC_PROJECT_URL`, `SYNC_PUBLIC_KEY`). Nooit een `service_role`-key in de browsercode.
-Status: verbinding en backend (tabel, RLS, bucket `vc2`, map `VC2`) zijn nog **niet geverifieerd** vanuit de ontwikkelomgeving (netwerk geblokkeerd).
+Status: verbinding en backend (tabel, RLS, bucket `vc2`, map `VC2`) zijn nog **niet geverifieerd**. Controle in fase 2: `https://ckodnfshelblddfypmmv.supabase.co` is vanuit de ontwikkelomgeving niet bereikbaar (DNS/netwerkblokkade, curl-exit 6) — dit is een netwerkblokkade, géén vastgestelde configuratiefout. Er zijn geen remote resources gewijzigd.
 
 ### Sync met Supabase Auth (`coach_data_auth`)
 Vereiste configuratie (handmatig in Supabase; de app voert zelf geen SQL uit):
@@ -39,3 +39,17 @@ Legenda: ✅ bestaat · 🟡 gedeeltelijk · ⬜ nog te bouwen
 5. **AI-trainingsassistent** — 🟡 (lokale, regelgebaseerde assistent; echte AI-provider ⬜ en vereist server-side configuratie)
 6. **Spelersontwikkeling en O23-doorstroom** — 🟡 (ontwikkeldoelen, gesprekken, doorstroomvelden bestaan; vertrouwelijke rechten server-side ⬜)
 7. **Wedstrijdcentrum, live registratie, dashboard en weekrapportage** — 🟡 (wedstrijdformulier, selecties, print/PDF bestaan; live registratie, offline-wachtrij, weekrapport ⬜)
+
+## Fase 2 (speelprincipes en kennisbank)
+**Toegevoegd**
+- Vijf bewerkbare *standaardvoorstellen* voor 1-4-3-3 (O23, verzorgd voetbal, hoog drukzetten): opbouw en balbezit, hoog drukzetten, omschakeling na balverlies, omschakeling na balverovering, restverdediging. Status "In ontwikkeling", gemarkeerd met `isStandardProposal`/`standardKey`; geen koppelingen aan oefeningen/trainingen. Idempotent via `gameModel.standardPrinciplesVersion` en controle op `standardKey`/naam: bestaande principes blijven ongemoeid, verwijderde principes komen niet terug, bewerken en verwijderen werken zoals voorheen.
+- VC2-zoeken: filters op bestandstype (PDF/.fckb) en doorzoekbaar/niet-doorzoekbaar; resultaten tonen oorspronkelijke bestandsnaam, passage en type; paginanummer alleen bij PDF (bij .fckb is de index één blok). Niet-doorzoekbare bestanden staan als "alleen openen" en geven nooit treffers. Bestaande indexen blijven geldig (type wordt afgeleid uit de naam); er wordt niet opnieuw geïndexeerd.
+- Per passage: "Oefening aan training toevoegen": controlemodal (training, zelf in te vullen naam, duur, passagetekst als beschrijving). Opgeslagen in de bestaande `exercises` + `planItems`, met bronverwijzing (`exercise.source`). Dubbelen (zelfde bron in dezelfde training) en dubbelklik worden voorkomen; bij mislukte opslag wordt de state teruggedraaid en een melding getoond. Naam wordt nooit uit de bestandsnaam afgeleid; de index bevat geen gestructureerde oefeningen.
+
+**Tests** (`node --test tests/app.test.js`): 20 geslaagd, 0 mislukt; `node --check app.js`: geslaagd. Eén bestaande test is aangepast om het principe op id te vinden (er staan nu ook standaardprincipes in de lijst).
+
+**Alleen met fixtures getest**: VC2-filters/zoeken/bronverwijzing (fixture-index), oefening toevoegen en foutafhandeling (gestubde opslag). De UI (modal, filters op iPhone/iPad/laptop) is niet in een browser getest.
+
+**Nog open**
+- Echte VC2-PDF's en .fckb's indexeren en zoekresultaten/paginanummers controleren; categorie-/trainingsdoel-/spelprincipe-filters ontbreken omdat die metadata niet in de index staat.
+- Supabase: URL/key, tabel `coach_data_auth`, RLS, bucket `vc2` en map `VC2` verifiëren zodra netwerk beschikbaar is.
