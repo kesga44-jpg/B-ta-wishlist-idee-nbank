@@ -188,3 +188,57 @@ test('spelprincipe met nieuwe velden blijft valide en wordt bewaard',()=>{
   const p=JSON.parse(a.ls.data['footballCoachDataV2']).gameModel.principles[0];
   assert.deepStrictEqual(p.commonMistakes,['te ver uit elkaar']);
 });
+const UID2='22222222-2222-4222-8222-222222222222';
+function syncSetup(a,{cloudRows=[],user=UID}={}){
+  a.ls.data['footballCoachSyncV1']=JSON.stringify({pass:S.pass});login(a);
+  const sess=JSON.parse(a.ls.data[a.t.AUTH_KEY]);sess.user={id:user,email:'x@y.nl'};login(a,sess);
+  return mockFetch(a,c=>isUser(c)?res({id:user}):c.method==='POST'?res([{id:'x'}],201):res(cloudRows));
+}
+const posts=calls=>calls.filter(c=>c.method==='POST'&&c.url.includes('/rest/v1/'));
+test('accountwissel: stille autosave uploadt niet naar nieuw account zonder cloudrij',async()=>{
+  const a=createApp();a.sandbox.confirm=()=>{throw new Error('geen prompt bij stille sync')};
+  a.ls.data[a.t.SYNC_ACCOUNT_KEY]=JSON.stringify({userId:UID});
+  const calls=syncSetup(a,{user:UID2});const before=JSON.stringify(a.t.state);
+  await a.t.pushSync(true);
+  assert.strictEqual(posts(calls).length,0);assert.strictEqual(JSON.stringify(a.t.state),before);
+});
+test('accountwissel: annuleren uploadt niets en toont account in de vraag',async()=>{
+  const a=createApp();let msg='';a.sandbox.confirm=m=>{msg=m;return false};
+  const calls=syncSetup(a,{user:UID2});const before=JSON.stringify(a.t.state);
+  await a.t.pushSync(false);
+  assert.ok(msg.includes('x@y.nl')&&/geüpload/.test(msg));
+  assert.strictEqual(posts(calls).length,0);assert.strictEqual(JSON.stringify(a.t.state),before);
+  assert.ok(!a.ls.data[a.t.SYNC_ACCOUNT_KEY]);
+});
+test('accountwissel: bevestigen uploadt en onthoudt keuze (geen herhaalde vraag)',async()=>{
+  const a=createApp();let asked=0;a.sandbox.confirm=()=>{asked++;return true};
+  const calls=syncSetup(a,{user:UID2});
+  await a.t.pushSync(false);
+  assert.strictEqual(posts(calls).length,1);assert.strictEqual(JSON.parse(posts(calls)[0].body)[0].user_id,UID2);
+  assert.strictEqual(JSON.parse(a.ls.data[a.t.SYNC_ACCOUNT_KEY]).userId,UID2);
+  await a.t.pushSync(true);assert.strictEqual(asked,1);
+});
+test('accountwissel: freshInstall/initialSync uploadt niet automatisch',async()=>{
+  const a=createApp(),calls=syncSetup(a,{user:UID2});
+  await a.t.initialSync();assert.strictEqual(posts(calls).length,0);
+});
+test('secret key: afwijkende herhaling wordt geweigerd, niets opgeslagen of geüpload',async()=>{
+  const a=createApp(),calls=mockFetch(a,()=>res([]));
+  const r=await a.t.checkNewSyncPass('nieuw1','nieuw2');
+  assert.strictEqual(r.ok,false);assert.ok(/komen niet overeen/.test(r.message));
+  assert.strictEqual(calls.length,0);assert.ok(!a.ls.data['footballCoachSyncV1']);
+});
+test('secret key: nieuwe sleutel zonder herhaling geweigerd; gelijke herhaling en bestaande sleutel ok',async()=>{
+  const a=createApp();mockFetch(a,()=>res([]));
+  assert.strictEqual((await a.t.checkNewSyncPass('nieuw1','')).ok,false);
+  assert.strictEqual((await a.t.checkNewSyncPass('nieuw1','nieuw1')).ok,true);
+  a.ls.data['footballCoachSyncV1']=JSON.stringify({pass:'nieuw1'});
+  assert.strictEqual((await a.t.checkNewSyncPass('nieuw1','')).ok,true);
+});
+test('secret key: bestaande cloudrij die ontsleutelt vereist geen herhaling; verkeerde sleutel wel',async()=>{
+  const a=createApp(),remote=a.t.normalizedStateCopy(a.t.state);
+  const payload=await a.t.encryptData(remote,'juist');
+  login(a);mockFetch(a,c=>isUser(c)?res({id:UID}):res([{payload,updated_at:'2026-01-01T00:00:00.000Z'}]));
+  assert.strictEqual((await a.t.checkNewSyncPass('juist','')).ok,true);
+  assert.strictEqual((await a.t.checkNewSyncPass('fout','')).ok,false);
+});
