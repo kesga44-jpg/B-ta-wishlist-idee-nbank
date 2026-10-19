@@ -304,3 +304,51 @@ test('mislukte opslag bij toevoegen: duidelijke fout en state teruggedraaid',()=
   assert.strictEqual(a.t.state.exercises.length,n);assert.strictEqual(t.planItems.length,before);
   assert.ok(a.toasts.some(m=>/Opslaan mislukt/.test(m)));
 });
+
+test('Meer → Trainingen: trainingspagina rendert zonder fout (trainingTemplateMeta bestaat)',()=>{
+  const vm=require('vm'),a=createApp();
+  assert.strictEqual(typeof vm.runInContext('trainingTemplateMeta',a.sandbox),'function');
+  const html=vm.runInContext("ui.page='trainings';renderTrainings()",a.sandbox);
+  assert.ok(html.includes('Trainingen')||html.length>0);
+  assert.ok(vm.runInContext('renderMore()',a.sandbox).includes('data-go="trainings"'));
+  assert.ok(vm.runInContext("trainingTemplateMeta({templateKey:'onbekend',templateName:'X'}).name",a.sandbox)==='X');
+});
+
+test('trainingssjablonen: presetDraft/customTemplateDraft/trainingTemplateInfo/trainingForm werken',()=>{
+  const vm=require('vm'),a=createApp(),r=c=>vm.runInContext(c,a.sandbox);
+  assert.ok(r("trainingForm(presetDraft('vc2'))").length>0);
+  assert.ok(r("trainingTemplateInfo({templateKey:'free'})").includes('Vrije training'));
+  assert.strictEqual(r("customTemplateDraft('bestaat-niet').templateKey"),'free');
+  assert.strictEqual(r("typeof openTrainingTemplateChooser+typeof saveTrainingAsTemplate+typeof deleteTrainingTemplate"),'functionfunctionfunction');
+});
+
+test('template opslaan: training blijft ongewijzigd, eigen template onderscheiden van standaard, annuleren/leeg doet niets',()=>{
+  const vm=require('vm'),a=createApp(),r=c=>vm.runInContext(c,a.sandbox);
+  const t=a.t.state.trainings[0],snap=JSON.stringify(a.t.state.trainings),n=a.t.state.trainings.length;
+  r("prompt=()=>null");r(`saveTrainingAsTemplate('${t.id}')`);
+  r("prompt=()=>'   '");r(`saveTrainingAsTemplate('${t.id}')`);
+  assert.strictEqual(r('state.templates.trainings.length'),0);
+  r("prompt=()=>' Mijn sjabloon '");r(`saveTrainingAsTemplate('${t.id}')`);
+  assert.strictEqual(r('state.templates.trainings.length'),1);
+  const tpl=r('state.templates.trainings[0]');
+  assert.strictEqual(tpl.name,'Mijn sjabloon');assert.strictEqual(tpl.templateKey,'custom');
+  assert.notStrictEqual(tpl.id,t.id);assert.ok(!('date' in tpl)&&!('attendance' in tpl));
+  assert.strictEqual(JSON.stringify(a.t.state.trainings),snap);
+  const d=r(`customTemplateDraft('${tpl.id}')`);
+  assert.strictEqual(d.templateKey,'custom');assert.strictEqual(d.templateName,'Mijn sjabloon');
+  assert.strictEqual(r("presetDraft('onbekend').templateKey"),'free');
+  assert.strictEqual(r("trainingTemplateMeta({templateKey:'toString'}).name"),'Vrije training');
+  r(`deleteTrainingTemplate('${tpl.id}')`);
+  assert.strictEqual(r('state.templates.trainings.length'),0);
+  assert.strictEqual(a.t.state.trainings.length,n);assert.strictEqual(JSON.stringify(a.t.state.trainings),snap);
+});
+test('template opslaan/verwijderen: opslagfout draait state terug',()=>{
+  const vm=require('vm'),a=createApp(),r=c=>vm.runInContext(c,a.sandbox);
+  const t=a.t.state.trainings[0];r("prompt=()=>'X'");
+  a.ls.failWrites=true;r(`saveTrainingAsTemplate('${t.id}')`);
+  assert.strictEqual(r('state.templates.trainings.length'),0);
+  a.ls.failWrites=false;r(`saveTrainingAsTemplate('${t.id}')`);
+  const id=r('state.templates.trainings[0].id');
+  a.ls.failWrites=true;r(`deleteTrainingTemplate('${id}')`);
+  assert.strictEqual(r('state.templates.trainings.length'),1);
+});
