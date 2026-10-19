@@ -8,6 +8,10 @@ const SYNC_KEY='footballCoachSyncV1';
 const SYNC_PROJECT_URL='https://ckodnfshelblddfypmmv.supabase.co';
 const SYNC_PUBLIC_KEY='sb_publishable_bSqDv3s7_bFqaBPkOaGllQ_cjUF9yT1';
 const SYNC_NAMESPACE='football-coach-v2';
+const AUTH_KEY='footballCoachAuthV1';
+const SYNC_ACCOUNT_KEY='footballCoachSyncAccountV1';
+const SYNC_TABLE='coach_data_auth';
+const SYNC_ROW_ID='football-coach-v2';
 const AUTO_BACKUP_KEY='footballCoachAutoBackupV1';
 const ARCHIVE_KEY='footballCoachSeasonArchivesV1';
 const RECOVERY_BACKUP_KEY='footballCoachRecoveryBackupV1';
@@ -830,7 +834,7 @@ function localAssistant(prompt){const q=prompt.toLowerCase(),team=activeTeam(),p
 async function runAssistant(){const prompt=$('#assistantPrompt')?.value.trim();if(!prompt){toast('Vul een vraag in');return}ui.assistantPrompt=prompt;ui.assistantAnswer='Bezig met analyseren…';renderPage();if(state.ai.endpoint){try{const summary=buildCoachSummary();summary.kennisbank=vc2Passages(prompt,5);const r=await fetch(state.ai.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,context:summary})});if(!r.ok)throw new Error('Endpoint gaf '+r.status);const data=await r.json();ui.assistantAnswer=data.answer||data.output||data.text||JSON.stringify(data);renderPage();return}catch(e){ui.assistantAnswer=`AI-endpoint niet bereikbaar (${e.message}). Daarom lokaal antwoord:\n\n${localAssistant(prompt)}`;renderPage();return}}{const kb=vc2PassagesText(prompt);ui.assistantAnswer=localAssistant(prompt)+(kb?`\n\nUit je VC2-documenten:\n${kb}`:'')}renderPage()}
 function buildCoachSummary(){const team=activeTeam(),players=playersForTeam(team.id);return {team:{name:team.name,formation:team.formation},players:players.map(p=>({name:p.name,position:p.position,selection:p.selection,attendance:attendancePct(p.id,team.id),stats:matchTotals(p.id,team.id),goals:p.developmentGoals})),nextTraining:nextTraining(team.id),nextMatch:nextMatch(team.id),recentNotes:state.coachNotes.filter(n=>n.teamId===team.id).slice(-20),recentMatches:state.matches.filter(m=>m.teamId===team.id).slice(-5).map(m=>({date:m.date,opponent:m.opponent,score:[m.goalsFor,m.goalsAgainst],evaluation:m.evaluation,plan:m.plan}))}}
 
-function renderSettings(){const sy=getSync(),auto=state.meta.lastAutoBackupAt||(()=>{try{return JSON.parse(localStorage.getItem(AUTO_BACKUP_KEY)||'{}').at}catch{return null}})(),activities=(state.meta.activityLog||[]).slice(0,8);let archiveCount=0;try{archiveCount=JSON.parse(localStorage.getItem(ARCHIVE_KEY)||'[]').length}catch{}const hasRecovery=!!localStorage.getItem(RECOVERY_BACKUP_KEY),hasConflict=!!localStorage.getItem(CLOUD_CONFLICT_KEY);return `<div class="grid two"><section class="card"><div class="card-head"><div><p class="eyebrow">CLUB & SEIZOEN</p><h2>Basisinstellingen</h2></div></div><div class="form-grid"><div class="field full"><label>Club</label><input id="setClub" class="input" value="${esc(state.club?.name||'')}"></div><div class="field"><label>Seizoen</label><input id="setSeason" class="input" value="${esc(state.team.season||'')}"></div><div class="field"><label>Standaard trainingstijd</label><input id="setTime" class="input" type="time" value="${esc(state.team.trainingTime||'20:00')}"></div><div class="field full"><label>Periodiseringsprincipes</label><textarea id="setPeriodization">${esc(state.periodization.principles||'')}</textarea></div><div class="field full"><label>Beveiligde AI-endpoint (optioneel)</label><input id="setAiEndpoint" class="input" placeholder="https://.../coach-ai" value="${esc(state.ai.endpoint||'')}"></div></div><button class="btn primary" data-save-settings>Instellingen opslaan</button></section><section class="card"><div class="card-head"><div><p class="eyebrow">BACK-UP & ARCHIEF</p><h2>Gegevens veiligstellen</h2></div></div><div class="backup-status"><div><span>Lokale automatische back-up</span><strong>${fmtDateTimeIso(auto)}</strong></div><div><span>Handmatige back-up</span><strong>${fmtDateTimeIso(state.meta.lastManualBackupAt)}</strong></div><div><span>Seizoensarchieven</span><strong>${archiveCount}</strong></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="btn primary" data-export>Back-up downloaden</button><button class="btn ghost" data-import>Back-up importeren</button><button class="btn secondary" data-archive-season>Seizoen archiveren</button><button class="btn danger" data-reset>Terug naar startdata</button>${hasRecovery?'<button class="btn ghost" data-download-recovery>Herstelpunt downloaden</button>':''}${hasConflict?'<button class="btn ghost" data-download-cloud-conflict>Cloudconflict downloaden</button>':''}</div></section></div><section class="card" style="margin-top:16px"><div class="card-head"><div><p class="eyebrow">VERSLEUTELDE SYNC</p><h2>iPhone · iPad · laptop</h2></div><span class="badge ${syncConfigured()?'green':''}">${syncConfigured()?'Ingesteld':'Secret key nodig'}</span></div><p class="muted small">Gebruik op ieder apparaat dezelfde Secret key. Bij elke opgeslagen wijziging wordt automatisch gesynchroniseerd zodra internet beschikbaar is.</p><div class="form-grid"><div class="field full"><label>Secret key</label><input id="syncPass" class="input" type="password" autocomplete="off" placeholder="Voer de gedeelde Secret key in" value="${esc(sy.pass||'')}"></div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-save-sync>Secret key opslaan</button><button class="btn ghost" data-push-sync ${syncConfigured()?'':'disabled'}>Upload nu</button><button class="btn ghost" data-pull-sync ${syncConfigured()?'':'disabled'}>Download nu</button></div><p id="syncStatus" class="muted small" style="margin-top:12px">${syncConfigured()?'Klaar voor versleutelde synchronisatie.':'Vul alleen de Secret key in om synchronisatie te activeren.'}</p></section><section class="card" style="margin-top:16px"><div class="card-head"><div><p class="eyebrow">ACTIEGESCHIEDENIS</p><h2>Laatste wijzigingen</h2></div><button class="btn ghost small-btn" data-undo-action ${undoStack.length?'':'disabled'}>↶ Ongedaan maken</button></div>${activities.length?activities.map(x=>`<div class="list-row"><span>${esc(x.label||x.page||'Wijziging')}</span><strong class="muted small">${fmtDateTimeIso(x.at)}</strong></div>`).join(''):'<div class="empty">Nog geen wijzigingen gelogd.</div>'}</section>`}
+function renderSettings(){const sy=getSync(),auto=state.meta.lastAutoBackupAt||(()=>{try{return JSON.parse(localStorage.getItem(AUTO_BACKUP_KEY)||'{}').at}catch{return null}})(),activities=(state.meta.activityLog||[]).slice(0,8);let archiveCount=0;try{archiveCount=JSON.parse(localStorage.getItem(ARCHIVE_KEY)||'[]').length}catch{}const hasRecovery=!!localStorage.getItem(RECOVERY_BACKUP_KEY),hasConflict=!!localStorage.getItem(CLOUD_CONFLICT_KEY);return `<div class="grid two"><section class="card"><div class="card-head"><div><p class="eyebrow">CLUB & SEIZOEN</p><h2>Basisinstellingen</h2></div></div><div class="form-grid"><div class="field full"><label>Club</label><input id="setClub" class="input" value="${esc(state.club?.name||'')}"></div><div class="field"><label>Seizoen</label><input id="setSeason" class="input" value="${esc(state.team.season||'')}"></div><div class="field"><label>Standaard trainingstijd</label><input id="setTime" class="input" type="time" value="${esc(state.team.trainingTime||'20:00')}"></div><div class="field full"><label>Periodiseringsprincipes</label><textarea id="setPeriodization">${esc(state.periodization.principles||'')}</textarea></div><div class="field full"><label>Beveiligde AI-endpoint (optioneel)</label><input id="setAiEndpoint" class="input" placeholder="https://.../coach-ai" value="${esc(state.ai.endpoint||'')}"></div></div><button class="btn primary" data-save-settings>Instellingen opslaan</button></section><section class="card"><div class="card-head"><div><p class="eyebrow">BACK-UP & ARCHIEF</p><h2>Gegevens veiligstellen</h2></div></div><div class="backup-status"><div><span>Lokale automatische back-up</span><strong>${fmtDateTimeIso(auto)}</strong></div><div><span>Handmatige back-up</span><strong>${fmtDateTimeIso(state.meta.lastManualBackupAt)}</strong></div><div><span>Seizoensarchieven</span><strong>${archiveCount}</strong></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="btn primary" data-export>Back-up downloaden</button><button class="btn ghost" data-import>Back-up importeren</button><button class="btn secondary" data-archive-season>Seizoen archiveren</button><button class="btn danger" data-reset>Terug naar startdata</button>${hasRecovery?'<button class="btn ghost" data-download-recovery>Herstelpunt downloaden</button>':''}${hasConflict?'<button class="btn ghost" data-download-cloud-conflict>Cloudconflict downloaden</button>':''}</div></section></div><section class="card" style="margin-top:16px"><div class="card-head"><div><p class="eyebrow">VERSLEUTELDE SYNC</p><h2>iPhone · iPad · laptop</h2></div><span class="badge ${syncConfigured()?'green':''}">${syncConfigured()?'Ingesteld':'Secret key nodig'}</span></div><p class="muted small">Gebruik op ieder apparaat dezelfde Secret key. Bij elke opgeslagen wijziging wordt automatisch gesynchroniseerd zodra internet beschikbaar is.</p><div class="form-grid"><div class="field full"><label>Account (Supabase Auth)</label>${getAuthSession()?`<p class="muted small">Ingelogd als ${esc(getAuthSession().user.email||getAuthSession().user.id)}</p><button class="btn ghost" data-auth-logout>Uitloggen</button>`:`<input id="authEmail" class="input" type="email" autocomplete="username" placeholder="E-mailadres"><input id="authPassword" class="input" type="password" autocomplete="current-password" placeholder="Wachtwoord (min. 6 tekens)"><div style="display:flex;gap:8px;margin-top:8px"><button class="btn primary" data-auth-login>Inloggen</button><button class="btn ghost" data-auth-signup>Registreren</button></div>`}</div><div class="field full"><label>Secret key (alleen voor versleuteling)</label><input id="syncPass" class="input" type="password" autocomplete="off" placeholder="Voer de gedeelde Secret key in" value="${esc(sy.pass||'')}"></div><div class="field full"><label>Secret key herhalen (bij een nieuwe sleutel)</label><input id="syncPassConfirm" class="input" type="password" autocomplete="off" placeholder="Herhaal de Secret key"></div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-save-sync>Secret key opslaan</button><button class="btn ghost" data-push-sync ${syncConfigured()?'':'disabled'}>Upload nu</button><button class="btn ghost" data-pull-sync ${syncConfigured()?'':'disabled'}>Download nu</button></div><p id="syncStatus" class="muted small" style="margin-top:12px">${syncConfigured()?'Klaar voor versleutelde synchronisatie.':'Vul alleen de Secret key in om synchronisatie te activeren.'}</p></section><section class="card" style="margin-top:16px"><div class="card-head"><div><p class="eyebrow">ACTIEGESCHIEDENIS</p><h2>Laatste wijzigingen</h2></div><button class="btn ghost small-btn" data-undo-action ${undoStack.length?'':'disabled'}>↶ Ongedaan maken</button></div>${activities.length?activities.map(x=>`<div class="list-row"><span>${esc(x.label||x.page||'Wijziging')}</span><strong class="muted small">${fmtDateTimeIso(x.at)}</strong></div>`).join(''):'<div class="empty">Nog geen wijzigingen gelogd.</div>'}</section>`}
 function renderMore(){return `<div class="grid two"><section class="card"><div class="card-head"><div><p class="eyebrow">COACH</p><h2>Meer onderdelen</h2></div></div><div class="list">${[['coachtoolkit','✦','Coachkompas'],['trainings','◫','Trainingen'],['attendance','✓','Aanwezigheid'],['matches','⚽','Wedstrijden'],['exercises','▦','Oefeningen'],['tactics','↗','Tactiekbord'],['gamemodel','◈','Spelmodel'],['season','▣','Seizoen'],['stats','▥','Statistieken'],['notes','✎','Coachnotities'],['knowledge','▤','Kennisbank'],['documents','⌁','Bronnen'],['assistant','✦','Coachassistent'],['settings','⚙','Instellingen']].map(([p,i,l])=>`<button class="list-row more-link" data-go="${p}"><span>${i} ${l}</span><strong>›</strong></button>`).join('')}</div></section><section class="card"><div class="card-head"><div><p class="eyebrow">ACTIEF TEAM</p><h2>${esc(activeTeam()?.name||'')}</h2></div></div><p class="muted">Gebruik Trainingsdag of Wedstrijddag tijdens een activiteit; Coachkompas voor KNVB-methodiek, reflectie en stafafspraken.</p></section></div>`}
 function modal(title,body,saveFn,opts={}){const d=$('#modal');$('#modalTitle').textContent=title;$('#modalBody').innerHTML=body;const b=$('#modalSave');b.textContent=opts.saveText||'Opslaan';b.onclick=e=>{e.preventDefault();if(opts.onSave){opts.onSave();return}const ok=saveFn?saveFn():true;if(ok===false)return;save({render:false});d.close();renderPage();opts.afterSave?.()};d.showModal()}
 function closeModal(){const d=$('#modal');if(d?.open)d.close()}
@@ -867,15 +871,97 @@ async function keyFromPass(pass,salt){const base=await crypto.subtle.importKey('
 async function encryptData(obj,pass){const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await keyFromPass(pass,salt),plain=new TextEncoder().encode(JSON.stringify(obj)),cipher=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain));return {v:1,salt:bytesToB64(salt),iv:bytesToB64(iv),data:bytesToB64(cipher)}}
 async function decryptData(payload,pass){const salt=b64ToBytes(payload.salt),iv=b64ToBytes(payload.iv),key=await keyFromPass(pass,salt),plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,b64ToBytes(payload.data));return JSON.parse(new TextDecoder().decode(plain))}
 function syncStatus(msg){const el=$('#syncStatus');if(el)el.textContent=msg}
-async function fetchCloudCopy(s,id){
-  const r=await fetch(s.url.replace(/\/$/,'')+'/rest/v1/coach_data?id=eq.'+encodeURIComponent(id)+'&select=payload,updated_at',{headers:{apikey:s.key,Authorization:'Bearer '+s.key},cache:'no-store'});
-  if(!r.ok)throw new Error(await r.text());
+class SyncError extends Error{constructor(msg,code){super(msg);this.name='SyncError';this.code=code||''}}
+const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let authVerified=false;
+function approvedSyncUser(){try{return JSON.parse(localStorage.getItem(SYNC_ACCOUNT_KEY)||'null')?.userId||''}catch{return ''}}
+function approveSyncUser(uid){try{localStorage.setItem(SYNC_ACCOUNT_KEY,JSON.stringify({userId:uid,at:new Date().toISOString()}))}catch{}}
+async function checkNewSyncPass(pass,confirmPass){
+  const stored=getSync().pass;
+  if(!pass)return {ok:false,message:'Voer een Secret key in'};
+  if(pass===stored)return {ok:true};
+  if(confirmPass&&confirmPass!==pass)return {ok:false,message:'De twee Secret keys komen niet overeen. Er is niets opgeslagen of geüpload.'};
+  if(confirmPass===pass)return {ok:true};
+  if(getAuthSession()){
+    try{const session=await ensureSession(),cloud=await fetchCloudCopy({...getSync(),pass},session);if(cloud)return {ok:true}}catch{}
+  }
+  return {ok:false,message:'Voer de nieuwe Secret key twee keer in (herhaal hem in het tweede veld). Er is niets opgeslagen of geüpload.'};
+}
+function getAuthSession(){try{const s=JSON.parse(localStorage.getItem(AUTH_KEY)||'null');if(s&&s.access_token&&s.refresh_token&&s.user&&UUID_RE.test(s.user.id||''))return s}catch{}return null}
+function clearAuthSession(){authVerified=false;try{localStorage.removeItem(AUTH_KEY)}catch{}}
+function storeAuthSession(r){
+  if(!r||!r.access_token||!r.refresh_token||!r.user||!UUID_RE.test(r.user.id||''))throw new SyncError('Ongeldig antwoord van de inlogservice','auth');
+  const expiresAt=r.expires_at?r.expires_at*1000:Date.now()+(Number(r.expires_in)||3600)*1000;
+  const s={access_token:r.access_token,refresh_token:r.refresh_token,expires_at:expiresAt,user:{id:r.user.id,email:r.user.email||''}};
+  localStorage.setItem(AUTH_KEY,JSON.stringify(s));return s;
+}
+async function syncFetch(url,opt){
+  try{return await fetch(url,opt)}
+  catch{throw new SyncError('Geen verbinding met de server. Controleer je internet; lokale gegevens zijn behouden.','network')}
+}
+async function readErrorText(r){try{const t=await r.text();try{const j=JSON.parse(t);return j.msg||j.message||j.error_description||j.error||t}catch{return t}}catch{return ''}}
+function authUrl(path){return SYNC_PROJECT_URL.replace(/\/$/,'')+'/auth/v1/'+path}
+async function authRequest(path,{method='POST',body,token}={}){
+  const headers={apikey:SYNC_PUBLIC_KEY,'Content-Type':'application/json'};if(token)headers.Authorization='Bearer '+token;
+  const r=await syncFetch(authUrl(path),{method,headers,body:body?JSON.stringify(body):undefined});
+  if(!r.ok){const t=await readErrorText(r);const e=new SyncError(r.status===400||r.status===401||r.status===422?(t||'Inloggen mislukt'):'Inlogservice gaf een fout ('+r.status+'): '+t,'auth');e.status=r.status;throw e}
+  return r.status===204?null:r.json();
+}
+async function authSignIn(email,password){
+  if(!email||!password)throw new SyncError('Vul e-mailadres en wachtwoord in','auth');
+  const s=storeAuthSession(await authRequest('token?grant_type=password',{body:{email,password}}));authVerified=true;return s;
+}
+async function authSignUp(email,password){
+  if(!email||!password)throw new SyncError('Vul e-mailadres en wachtwoord in','auth');
+  const r=await authRequest('signup',{body:{email,password}});
+  if(!r||!r.access_token)return null;
+  const s=storeAuthSession(r);authVerified=true;return s;
+}
+async function authSignOut(){
+  const s=getAuthSession();clearAuthSession();
+  if(s){try{await authRequest('logout',{token:s.access_token})}catch{}}
+}
+async function ensureSession(){
+  let s=getAuthSession();
+  if(!s)throw new SyncError('Niet ingelogd. Log in via Instellingen → Sync; lokale gegevens zijn behouden.','auth');
+  if(s.expires_at-Date.now()<60000){
+    try{s=storeAuthSession(await authRequest('token?grant_type=refresh_token',{body:{refresh_token:s.refresh_token}}));authVerified=true}
+    catch(e){
+      if(e.code==='auth'){clearAuthSession();throw new SyncError('Je sessie is verlopen. Log opnieuw in; lokale gegevens zijn behouden.','auth')}
+      throw e;
+    }
+  }
+  if(!authVerified){
+    let u;
+    try{u=await authRequest('user',{method:'GET',token:s.access_token})}
+    catch(e){if(e.code==='auth'){clearAuthSession();throw new SyncError('Je sessie is verlopen of ongeldig. Log opnieuw in; lokale gegevens zijn behouden.','auth')}throw e}
+    if(!u||u.id!==s.user.id){clearAuthSession();throw new SyncError('Sessie komt niet overeen met de geverifieerde gebruiker. Log opnieuw in.','auth')}
+    authVerified=true;
+  }
+  return s;
+}
+function tableUrl(query){return SYNC_PROJECT_URL.replace(/\/$/,'')+'/rest/v1/'+SYNC_TABLE+(query||'')}
+function tableHeaders(s,session,extra){return {apikey:s.key,Authorization:'Bearer '+session.access_token,...(extra||{})}}
+async function tableError(r){
+  const t=await readErrorText(r);
+  if(r.status===401){clearAuthSession();return new SyncError('Je sessie is verlopen. Log opnieuw in; lokale gegevens zijn behouden.','auth')}
+  if(r.status===403)return new SyncError('Geen toegang tot de cloudgegevens (RLS-policy). Controleer de Supabase-configuratie.','forbidden');
+  if(r.status===404)return new SyncError('Tabel '+SYNC_TABLE+' niet gevonden. Controleer de Supabase-configuratie.','config');
+  return new SyncError('Cloudfout ('+r.status+'): '+t,'server');
+}
+async function fetchCloudCopy(s,session){
+  const uid=session.user.id;
+  const r=await syncFetch(tableUrl('?user_id=eq.'+encodeURIComponent(uid)+'&id=eq.'+encodeURIComponent(SYNC_ROW_ID)+'&select=payload,updated_at'),{headers:tableHeaders(s,session),cache:'no-store'});
+  if(!r.ok)throw await tableError(r);
   const rows=await r.json();
-  if(!Array.isArray(rows)||rows.length>1)throw new Error('Ongeldige cloudrespons');
+  if(!Array.isArray(rows)||rows.length>1)throw new SyncError('Ongeldige cloudrespons','server');
   if(!rows.length)return null;
-  const data=validateStateData(await decryptData(rows[0].payload,s.pass));
+  let data;
+  try{data=validateStateData(await decryptData(rows[0].payload,s.pass))}
+  catch{throw new SyncError('Cloudgegevens konden niet worden ontsleuteld of gevalideerd. Controleer de versleutelingssleutel; er is niets overschreven.','decrypt')}
   return {data,updatedAt:rows[0].updated_at||''};
 }
+
 function normalizedStateCopy(candidate){
   const previous=state,previousTeamId=ui.teamId;
   try{state=clone(validateStateData(candidate));normalize();return clone(state)}
@@ -896,21 +982,20 @@ function persistRemoteCopy(data){
   }catch(e){state=previous;ui.teamId=previousTeamId;throw e}
   renderPage();
 }
-async function writeCloudCopy(s,id,local,cloud){
-  const payload=await encryptData(local,s.pass);
+async function writeCloudCopy(s,session,local,cloud){
+  const uid=session.user.id,payload=await encryptData(local,s.pass);
   let r;
   if(cloud){
     const expected=Date.parse(cloud.updatedAt);
-    if(!Number.isFinite(expected))throw new Error('Cloudkopie mist geldige wijzigingsmetadata; upload afgebroken');
+    if(!Number.isFinite(expected))throw new SyncError('Cloudkopie mist geldige wijzigingsmetadata; upload afgebroken','server');
     const updatedAt=new Date(Math.max(Date.now(),expected+1)).toISOString();
-    r=await fetch(s.url.replace(/\/$/,'')+'/rest/v1/coach_data?id=eq.'+encodeURIComponent(id)+'&updated_at=eq.'+encodeURIComponent(cloud.updatedAt),{method:'PATCH',headers:{apikey:s.key,Authorization:'Bearer '+s.key,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify({payload,updated_at:updatedAt})});
+    r=await syncFetch(tableUrl('?user_id=eq.'+encodeURIComponent(uid)+'&id=eq.'+encodeURIComponent(SYNC_ROW_ID)+'&updated_at=eq.'+encodeURIComponent(cloud.updatedAt)),{method:'PATCH',headers:tableHeaders(s,session,{'Content-Type':'application/json',Prefer:'return=representation'}),body:JSON.stringify({payload,updated_at:updatedAt})});
   }else{
-    r=await fetch(s.url.replace(/\/$/,'')+'/rest/v1/coach_data?on_conflict=id',{method:'POST',headers:{apikey:s.key,Authorization:'Bearer '+s.key,'Content-Type':'application/json',Prefer:'resolution=ignore-duplicates,return=representation'},body:JSON.stringify([{id,payload,updated_at:new Date().toISOString()}])});
+    r=await syncFetch(tableUrl(),{method:'POST',headers:tableHeaders(s,session,{'Content-Type':'application/json',Prefer:'return=representation'}),body:JSON.stringify([{user_id:uid,id:SYNC_ROW_ID,payload,updated_at:new Date().toISOString()}])});
   }
-  if(!r.ok)throw new Error(await r.text());
-  const rows=await r.json();
-  if(Array.isArray(rows)&&rows.length)return true;
-  const latest=await fetchCloudCopy(s,id);
+  if(r.ok){const rows=await r.json();if(Array.isArray(rows)&&rows.length)return true}
+  else if(r.status!==409)throw await tableError(r);
+  const latest=await fetchCloudCopy(s,session);
   if(latest)preserveCloudConflict(latest);
   syncStatus('Syncconflict: clouddata is intussen gewijzigd of bestaat al. De nieuwste cloudversie is behouden; controleer beide versies.');
   return false;
@@ -919,16 +1004,21 @@ async function pushSync(silent=false){
   const s=getSync();if(!syncConfigured()||syncInFlight||storageLoadError)return;
   syncInFlight=true;
   try{
-    const local=normalizedStateCopy(state),id=await syncIdFromPass(s.pass),cloud=await fetchCloudCopy(s,id);
+    const session=await ensureSession(),local=normalizedStateCopy(state),cloud=await fetchCloudCopy(s,session);
     if(cloud&&JSON.stringify(normalizedStateCopy(cloud.data))!==JSON.stringify(local)){
       if(!preserveCloudConflict(cloud)){syncStatus('Syncconflict: cloudversie kon niet lokaal worden bewaard; cloud is niet overschreven.');return}
       if(silent){syncStatus('Syncconflict: lokale en cloudgegevens verschillen. Cloudversie is bewaard; kies Download of bevestig handmatig Upload.');return}
       if(!confirm('De lokale en cloudgegevens verschillen. De cloudversie wordt eerst lokaal bewaard. Wil je de cloudversie vervangen door deze lokale versie?')){syncStatus('Syncconflict: beide versies behouden; geen gegevens overschreven.');return}
     }
+    if(!cloud&&approvedSyncUser()!==session.user.id){
+      if(silent){syncStatus('Upload wacht op bevestiging: dit account heeft nog geen cloudgegevens. Kies Upload nu om lokale gegevens naar '+(session.user.email||session.user.id)+' te uploaden.');return}
+      if(!confirm('Je lokale gegevens worden voor het eerst geüpload naar het account '+(session.user.email||session.user.id)+'. Dit account heeft nog geen cloudgegevens. Doorgaan?')){syncStatus('Upload geannuleerd; er is niets geüpload en lokale gegevens zijn ongewijzigd.');return}
+    }
     syncStatus('Versleutelen en veilig synchroniseren…');
-    if(!await writeCloudCopy(s,id,local,cloud)){if(!silent)toast('Syncconflict; de nieuwere cloudversie is behouden');return}
+    if(!await writeCloudCopy(s,session,local,cloud)){if(!silent)toast('Syncconflict; de nieuwere cloudversie is behouden');return}
+    approveSyncUser(session.user.id);
     syncStatus('Gesynchroniseerd · '+new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}));if(!silent)toast('Sync geüpload');
-  }catch(e){syncStatus('Syncfout: '+e.message);if(!silent)toast('Sync mislukt')}
+  }catch(e){syncStatus((e.code==='auth'?'Sessie: ':'Syncfout: ')+e.message);if(!silent)toast(e.code==='auth'?'Niet ingelogd of sessie verlopen':'Sync mislukt');if(e.code==='auth')renderAuthState()}
   finally{syncInFlight=false}
 }
 async function pullSync(silent=false){
@@ -936,29 +1026,30 @@ async function pullSync(silent=false){
   syncInFlight=true;
   try{
     syncStatus('Gegevens ophalen…');
-    const id=await syncIdFromPass(s.pass),cloud=await fetchCloudCopy(s,id);
-    if(!cloud){syncStatus('Nog geen clouddata voor deze Secret key. Upload dit apparaat eerst.');return}
+    const session=await ensureSession(),cloud=await fetchCloudCopy(s,session);
+    if(!cloud){syncStatus('Nog geen clouddata voor dit account. Upload dit apparaat eerst.');return}
     if(!confirm('Clouddata vervangt de lokale versie. De lokale gegevens worden eerst als herstelpunt bewaard. Doorgaan?'))return;
-    persistRemoteCopy(cloud.data);
+    persistRemoteCopy(cloud.data);approveSyncUser(session.user.id);
     syncStatus('Clouddata opgehaald; lokale versie als herstelpunt bewaard');if(!silent)toast('Clouddata opgehaald');
-  }catch(e){syncStatus('Syncfout: '+e.message);if(!silent)toast('Ophalen mislukt')}
+  }catch(e){syncStatus((e.code==='auth'?'Sessie: ':'Syncfout: ')+e.message);if(!silent)toast(e.code==='auth'?'Niet ingelogd of sessie verlopen':'Ophalen mislukt');if(e.code==='auth')renderAuthState()}
   finally{syncInFlight=false}
 }
 async function initialSync(){
   if(!syncConfigured()||syncInFlight)return;
   syncInFlight=true;
   try{
-    const s=getSync(),id=await syncIdFromPass(s.pass),cloud=await fetchCloudCopy(s,id);
+    const s=getSync(),session=await ensureSession(),cloud=await fetchCloudCopy(s,session);
     if(!cloud)return;
     const local=normalizedStateCopy(state),remote=normalizedStateCopy(cloud.data);
-    if(JSON.stringify(local)===JSON.stringify(remote))return;
-    if(freshInstall){persistRemoteCopy(remote);toast('Clouddata geladen; startdata bewaard als herstelpunt');return}
+    if(JSON.stringify(local)===JSON.stringify(remote)){approveSyncUser(session.user.id);return}
+    if(freshInstall){persistRemoteCopy(remote);approveSyncUser(session.user.id);toast('Clouddata geladen; startdata bewaard als herstelpunt');return}
     const preserved=preserveCloudConflict({...cloud,data:remote});
     syncStatus(preserved?'Syncconflict: lokale en cloudgegevens verschillen. Beide versies zijn bewaard; kies Download of handmatig Upload.':'Syncconflict: lokale gegevens zijn behouden en de cloudversie staat nog online, maar kon niet lokaal worden gekopieerd.');
     toast('Syncconflict: lokale gegevens zijn behouden; controleer Instellingen → Sync');
-  }catch(e){syncStatus('Syncfout: '+e.message)}
+  }catch(e){syncStatus((e.code==='auth'?'Sessie: ':'Syncfout: ')+e.message);if(e.code==='auth')renderAuthState()}
   finally{syncInFlight=false}
 }
+function renderAuthState(){if(typeof ui!=='undefined'&&ui.page==='settings')renderPage()}
 
 function bindPage(){
   const ps=$('#playerSearch');if(ps)ps.oninput=e=>{ui.playerSearch=e.target.value;renderPage()};
@@ -1127,7 +1218,9 @@ function handleClick(e){
   if(b.hasAttribute('data-download-cloud-conflict'))return downloadRecoveryCopy(CLOUD_CONFLICT_KEY);
   if(b.hasAttribute('data-import')){$('#importFile').click();return}
   if(b.hasAttribute('data-reset')){if(confirm('Alle lokale wijzigingen vervangen door de oorspronkelijke startdata? Er wordt eerst een herstelpunt van de huidige opslag bewaard.')){try{const raw=localStorage.getItem(STORAGE_KEY)??localStorage.getItem(LEGACY_STORAGE_KEY);localStorage.setItem(RECOVERY_BACKUP_KEY,JSON.stringify({at:new Date().toISOString(),raw:raw??JSON.stringify(state),state:storageLoadError?null:clone(state)}));storageLoadError=null;state=clone(window.STARTER_DATA);normalize();save();toast('Startdata teruggezet; vorige versie staat in herstelpunt')}catch(e){toast('Terugzetten mislukt; bestaande gegevens zijn behouden: '+e.message)}}return}
-  if(b.hasAttribute('data-save-sync')){const pass=$('#syncPass').value.trim();if(!pass){localStorage.removeItem(SYNC_KEY);renderPage();toast('Secret key verwijderd');return}localStorage.setItem(SYNC_KEY,JSON.stringify({pass}));renderPage();toast('Secret key opgeslagen');initialSync();return}
+  if(b.hasAttribute('data-save-sync')){const pass=$('#syncPass').value.trim(),confirmPass=($('#syncPassConfirm')?.value||'').trim();if(!pass){localStorage.removeItem(SYNC_KEY);renderPage();toast('Secret key verwijderd');return}(async()=>{const chk=await checkNewSyncPass(pass,confirmPass);if(!chk.ok){syncStatus(chk.message);toast(chk.message);return}localStorage.setItem(SYNC_KEY,JSON.stringify({pass}));renderPage();toast('Secret key opgeslagen');initialSync()})();return}
+  if(b.hasAttribute('data-auth-login')||b.hasAttribute('data-auth-signup')){const email=$('#authEmail').value.trim(),pw=$('#authPassword').value,signup=b.hasAttribute('data-auth-signup');(async()=>{try{const s=await(signup?authSignUp:authSignIn)(email,pw);renderPage();if(!s){toast('Account aangemaakt; bevestig eerst je e-mail en log daarna in');return}toast('Ingelogd als '+s.user.email);initialSync()}catch(e){toast(e.message)}})();return}
+  if(b.hasAttribute('data-auth-logout')){authSignOut().then(()=>{renderPage();toast('Uitgelogd; lokale gegevens zijn behouden')});return}
   if(b.hasAttribute('data-push-sync'))return pushSync();
   if(b.hasAttribute('data-pull-sync'))return pullSync();
 }
