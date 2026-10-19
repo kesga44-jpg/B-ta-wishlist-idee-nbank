@@ -304,3 +304,20 @@ test('mislukte opslag bij toevoegen: duidelijke fout en state teruggedraaid',()=
   assert.strictEqual(a.t.state.exercises.length,n);assert.strictEqual(t.planItems.length,before);
   assert.ok(a.toasts.some(m=>/Opslaan mislukt/.test(m)));
 });
+
+test('Meer → Trainingen: trainingspagina rendert zonder fout (trainingTemplateMeta bestaat)',()=>{
+  const vm=require('vm'),a=createApp();
+  assert.strictEqual(typeof vm.runInContext('trainingTemplateMeta',a.sandbox),'function');
+  const html=vm.runInContext("ui.page='trainings';renderTrainings()",a.sandbox);
+  assert.ok(html.includes('Trainingen')||html.length>0);
+  assert.ok(vm.runInContext('renderMore()',a.sandbox).includes('data-go="trainings"'));
+  assert.ok(vm.runInContext("trainingTemplateMeta({templateKey:'onbekend',templateName:'X'}).name",a.sandbox)==='X');
+});
+
+test('trainingssjablonen: presetDraft/customTemplateDraft/trainingTemplateInfo/trainingForm werken',()=>{
+  const vm=require('vm'),a=createApp(),r=c=>vm.runInContext(c,a.sandbox);
+  assert.ok(r("trainingForm(presetDraft('vc2'))").length>0);
+  assert.ok(r("trainingTemplateInfo({templateKey:'free'})").includes('Vrije training'));
+  assert.strictEqual(r("customTemplateDraft('bestaat-niet').templateKey"),'free');
+  assert.strictEqual(r("typeof openTrainingTemplateChooser+typeof saveTrainingAsTemplate+typeof deleteTrainingTemplate"),'functionfunctionfunction');
+});
