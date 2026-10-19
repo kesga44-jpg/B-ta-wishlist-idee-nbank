@@ -107,6 +107,68 @@ test('kennisbank: niet-doorzoekbare PDF wordt niet als doorzoekbaar behandeld en
 test('spelprincipe met nieuwe velden blijft valide en wordt bewaard',()=>{
   const a=createApp();a.t.state.gameModel.principles.push({id:'p1',name:'Hoog drukzetten',recognizableSituations:'x',commonMistakes:['te ver uit elkaar']});
   a.t.save({render:false,sync:false});
-  const p=JSON.parse(a.ls.data['footballCoachDataV2']).gameModel.principles[0];
+  const p=JSON.parse(a.ls.data['footballCoachDataV2']).gameModel.principles.find(x=>x.id==='p1');
   assert.deepStrictEqual(p.commonMistakes,['te ver uit elkaar']);
+});
+
+// ---- Fase 2 ----
+const stdPrinciples=a=>a.t.state.gameModel.principles.filter(p=>p.standardKey);
+test('standaardprincipes: 5 stuks, idempotent, geen koppelingen, bij herladen geen duplicaten',()=>{
+  const a=createApp();assert.strictEqual(stdPrinciples(a).length,5);
+  a.t.seedStandardPrinciples();a.t.seedStandardPrinciples();
+  assert.strictEqual(stdPrinciples(a).length,5);
+  assert.ok(stdPrinciples(a).every(p=>p.isStandardProposal&&!p.exerciseIds.length&&!p.trainingIds.length&&/standaardvoorstel/i.test(p.observation)));
+  const b=createApp({store:{[V2]:a.ls.data[V2]}});assert.strictEqual(stdPrinciples(b).length,5);
+});
+test('standaardprincipes: bestaande principes blijven, bewerken/verwijderen blijft bewaard (geen herseed)',()=>{
+  const d=starter();delete d.gameModel.standardPrinciplesVersion;d.gameModel.principles=[{id:'mijn',name:'Restverdediging',description:'eigen tekst'}];
+  const a=createApp({store:{[V2]:JSON.stringify(d)}}),ps=a.t.state.gameModel.principles;
+  assert.strictEqual(ps.filter(p=>p.name==='Restverdediging').length,1);
+  assert.strictEqual(ps.find(p=>p.id==='mijn').description,'eigen tekst');
+  assert.strictEqual(ps.length,5);
+  const s=stdPrinciples(a)[0];s.name='Aangepast';a.t.state.gameModel.principles=ps.filter(p=>p.id!==stdPrinciples(a)[1].id);
+  a.t.save({render:false,sync:false});
+  const b=createApp({store:{[V2]:a.ls.data[V2]}});
+  assert.strictEqual(b.t.state.gameModel.principles.length,4);assert.ok(b.t.state.gameModel.principles.some(p=>p.name==='Aangepast'));
+});
+const fixtureIndex=()=>({
+  'a.pdf':{fileName:'Origineel A.pdf',fileType:'pdf',indexedAt:'2026-01-01',searchable:true,pages:['Intro tekst','Hoog druk zetten met looplijn en afschermen van de passlijn']},
+  'b.fckb':{fileName:'B.fckb',fileType:'fckb',indexedAt:'2026-01-01',searchable:true,pages:['Hoog druk zetten bij terugspeelbal']},
+  'scan.pdf':{fileName:'Scan.pdf',fileType:'pdf',indexedAt:'2026-01-01',searchable:false,pages:['','']}
+});
+test('zoeken met filters en bronverwijzing: paginanummer alleen bij PDF, niet-doorzoekbaar nooit in resultaten',()=>{
+  const a=createApp();Object.assign(a.t.vc2Index(),fixtureIndex());
+  const all=a.t.vc2Passages('druk looplijn',10);
+  assert.ok(all.some(h=>h.name==='Origineel A.pdf'&&h.page===2&&h.type==='pdf'));
+  assert.ok(all.some(h=>h.name==='B.fckb'&&h.page===null));
+  assert.ok(!all.some(h=>h.name==='Scan.pdf'));
+  assert.ok(a.t.vc2Passages('druk',10,{type:'fckb'}).every(h=>h.type==='fckb'));
+  assert.ok(a.t.vc2Passages('druk',10,{type:'pdf'}).every(h=>h.type==='pdf'));
+  assert.strictEqual(a.t.vc2Passages('druk',10,{searchable:'no'}).length,0);
+});
+test('niet-doorzoekbare documenten: filter en label',()=>{
+  const a=createApp(),idx=fixtureIndex();
+  assert.strictEqual(a.t.vc2IsSearchable(idx['scan.pdf']),false);
+  assert.strictEqual(a.t.vc2FileMatches('scan.pdf',idx['scan.pdf'],{searchable:'yes'}),false);
+  assert.strictEqual(a.t.vc2FileMatches('scan.pdf',idx['scan.pdf'],{searchable:'no'}),true);
+  assert.strictEqual(a.t.vc2FileMatches('b.fckb',idx['b.fckb'],{type:'pdf'}),false);
+});
+const src={type:'vc2',file:'a.pdf',fileName:'Origineel A.pdf',page:2,excerpt:'Hoog druk zetten'};
+test('oefening aan training toevoegen met bronverwijzing; dubbele toevoeging voorkomen',()=>{
+  const a=createApp(),t=a.t.state.trainings[0],n=a.t.state.exercises.length,before=t.planItems.length;
+  const r=a.t.addExerciseToTraining(t.id,{name:'Druk zetten',duration:12,description:'tekst',source:src});
+  assert.ok(r.ok);assert.strictEqual(a.t.state.exercises.length,n+1);assert.strictEqual(t.planItems.length,before+1);
+  assert.deepStrictEqual(r.exercise.source,src);assert.ok(t.exerciseIds.includes(r.exercise.id));
+  const r2=a.t.addExerciseToTraining(t.id,{name:'Druk zetten',source:src});
+  assert.ok(!r2.ok&&r2.duplicate);assert.strictEqual(a.t.state.exercises.length,n+1);assert.strictEqual(t.planItems.length,before+1);
+  assert.ok(!a.t.addExerciseToTraining(t.id,{name:'  '}).ok);
+  assert.ok(JSON.parse(a.ls.data[V2]).exercises.some(e=>e.source&&e.source.file==='a.pdf'));
+});
+test('mislukte opslag bij toevoegen: duidelijke fout en state teruggedraaid',()=>{
+  const a=createApp(),t=a.t.state.trainings[0],n=a.t.state.exercises.length,before=t.planItems.length;
+  a.ls.failWrites=true;
+  const r=a.t.addExerciseToTraining(t.id,{name:'X',source:src});
+  assert.ok(!r.ok&&/mislukt/.test(r.error));
+  assert.strictEqual(a.t.state.exercises.length,n);assert.strictEqual(t.planItems.length,before);
+  assert.ok(a.toasts.some(m=>/Opslaan mislukt/.test(m)));
 });
