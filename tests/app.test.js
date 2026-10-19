@@ -53,41 +53,119 @@ test('spelers met meerdere teams en aanwezigheid/selectie zijn gescheiden velden
   a.t.state.matches.forEach(m=>{assert.ok(m.attendance&&typeof m.attendance==='object');assert.ok(Array.isArray(m.benchIds));assert.ok(m.lineup&&typeof m.lineup==='object')});
 });
 
-// Sync met gemockte fetch
-function syncEnv(rows,{patchRows}={}){
-  const a=createApp(),calls=[];
-  a.sandbox.fetch=async(url,opt={})=>{calls.push({url,method:opt.method||'GET'});
-    const m=opt.method||'GET';
-    const body=m==='GET'?rows():(patchRows||[{id:'x'}]);
-    return {ok:true,json:async()=>body,text:async()=>''}};
-  return {a,calls};
-}
+// Sync met gemockte fetch (Supabase Auth + coach_data_auth)
 const S={url:'https://example.invalid',key:'k',pass:'geheim'};
-test('sync: cloud ontbreekt -> POST met ignore-duplicates, geen PATCH',async()=>{
-  const {a,calls}=syncEnv(()=>[]);
-  const id=await a.t.syncIdFromPass(S.pass);
-  const ok=await a.t.writeCloudCopy(S,id,a.t.normalizedStateCopy(a.t.state),null);
+const UID='11111111-2222-3333-4444-555555555555';
+const SESSION={access_token:'tok',refresh_token:'ref',expires_at:Date.now()+3600000,user:{id:UID,email:'a@b.nl'}};
+const res=(body,status=200)=>({ok:status>=200&&status<300,status,json:async()=>body,text:async()=>typeof body==='string'?body:JSON.stringify(body)});
+function login(a,session=SESSION){a.ls.data[a.t.AUTH_KEY]=JSON.stringify(session)}
+function mockFetch(a,handler){const calls=[];a.sandbox.fetch=async(url,opt={})=>{const c={url,method:opt.method||'GET',headers:opt.headers||{},body:opt.body};calls.push(c);return handler(c)};return calls}
+const isUser=c=>c.url.endsWith('/auth/v1/user');
+test('sync: cloud ontbreekt -> POST met user_id uit sessie, geen PATCH, nooit coach_data',async()=>{
+  const a=createApp(),calls=mockFetch(a,c=>res([{id:'x'}],201));
+  const ok=await a.t.writeCloudCopy(S,SESSION,a.t.normalizedStateCopy(a.t.state),null);
   assert.strictEqual(ok,true);assert.deepStrictEqual(calls.map(c=>c.method),['POST']);
+  assert.ok(calls[0].url.endsWith('/rest/v1/coach_data_auth'));
+  const row=JSON.parse(calls[0].body)[0];assert.strictEqual(row.user_id,UID);assert.strictEqual(row.id,a.t.SYNC_ROW_ID);
+  assert.strictEqual(calls[0].headers.Authorization,['Bearer','tok'].join(' '));
 });
-test('sync: PATCH zonder treffer (cloud intussen gewijzigd) = conflict, geen succes, cloudversie bewaard',async()=>{
+test('sync: POST 409 (rij bestaat al) = conflict, cloudversie bewaard',async()=>{
   const a=createApp(),remote=a.t.normalizedStateCopy(a.t.state);remote.team.name='Andere';
   const payload=await a.t.encryptData(remote,S.pass);
-  let patched=false;
-  a.sandbox.fetch=async(u,o={})=>{const m=o.method||'GET';if(m==='PATCH'){patched=true;return {ok:true,json:async()=>[],text:async()=>''}}
-    return {ok:true,json:async()=>[{payload,updated_at:'2026-01-01T00:00:00.000Z'}],text:async()=>''}};
-  const id=await a.t.syncIdFromPass(S.pass),cloud=await a.t.fetchCloudCopy(S,id);
-  const ok=await a.t.writeCloudCopy(S,id,a.t.normalizedStateCopy(a.t.state),cloud);
-  assert.ok(patched);assert.strictEqual(ok,false);
+  mockFetch(a,c=>c.method==='POST'?res('dup',409):res([{payload,updated_at:'2026-01-01T00:00:00.000Z'}]));
+  assert.strictEqual(await a.t.writeCloudCopy(S,SESSION,a.t.normalizedStateCopy(a.t.state),null),false);
+  assert.strictEqual(JSON.parse(a.ls.data[a.t.CLOUD_CONFLICT_KEY]).data.team.name,'Andere');
+});
+test('sync: GET filtert op user_id en id (samengestelde sleutel)',async()=>{
+  const a=createApp(),calls=mockFetch(a,()=>res([]));
+  assert.strictEqual(await a.t.fetchCloudCopy(S,SESSION),null);
+  assert.ok(calls[0].url.includes('coach_data_auth?user_id=eq.'+UID+'&id=eq.'+a.t.SYNC_ROW_ID));
+  assert.ok(!/coach_data\?/.test(calls[0].url));
+});
+test('sync: PATCH zonder treffer (cloud intussen gewijzigd) = conflict, cloudversie bewaard',async()=>{
+  const a=createApp(),remote=a.t.normalizedStateCopy(a.t.state);remote.team.name='Andere';
+  const payload=await a.t.encryptData(remote,S.pass);let patch;
+  mockFetch(a,c=>{if(c.method==='PATCH'){patch=c;return res([])}return res([{payload,updated_at:'2026-01-01T00:00:00.000Z'}])});
+  const cloud=await a.t.fetchCloudCopy(S,SESSION);
+  const ok=await a.t.writeCloudCopy(S,SESSION,a.t.normalizedStateCopy(a.t.state),cloud);
+  assert.strictEqual(ok,false);
+  assert.ok(patch.url.includes('user_id=eq.'+UID)&&patch.url.includes('updated_at=eq.'));
   assert.strictEqual(JSON.parse(a.ls.data[a.t.CLOUD_CONFLICT_KEY]).data.team.name,'Andere');
 });
 test('sync: verschillende cloudversie wordt bewaard en niet overschreven zonder bevestiging',async()=>{
   const a=createApp({confirmAnswer:false}),remote=a.t.normalizedStateCopy(a.t.state);remote.team.name='Cloudnaam';
-  const payload=await a.t.encryptData(remote,S.pass),methods=[];
-  a.sandbox.fetch=async(u,o={})=>{methods.push(o.method||'GET');return {ok:true,json:async()=>[{payload,updated_at:'2026-01-01T00:00:00.000Z'}],text:async()=>''}};
+  const payload=await a.t.encryptData(remote,S.pass);
+  const calls=mockFetch(a,c=>isUser(c)?res({id:UID}):res([{payload,updated_at:'2026-01-01T00:00:00.000Z'}]));
+  a.ls.data['footballCoachSyncV1']=JSON.stringify({pass:S.pass});login(a);
+  await a.t.pushSync(false);
+  assert.ok(!calls.some(c=>c.method==='PATCH'||c.method==='POST'&&!c.url.includes('/auth/')));
+  assert.ok(a.ls.data[a.t.CLOUD_CONFLICT_KEY]);
+});
+test('sessie: niet ingelogd -> geen netwerkverkeer en duidelijke melding',async()=>{
+  const a=createApp(),calls=mockFetch(a,()=>res([]));
   a.ls.data['footballCoachSyncV1']=JSON.stringify({pass:S.pass});
   await a.t.pushSync(false);
-  assert.ok(!methods.includes('PATCH')&&!methods.includes('POST'));
-  assert.ok(a.ls.data[a.t.CLOUD_CONFLICT_KEY]);
+  assert.strictEqual(calls.length,0);
+  assert.ok(a.toasts.some(t=>/ingelogd/.test(t)));
+  await assert.rejects(()=>a.t.ensureSession(),/Niet ingelogd/);
+});
+test('sessie: inloggen bewaart sessie; user_id komt uit Auth-antwoord',async()=>{
+  const a=createApp(),calls=mockFetch(a,()=>res({access_token:'t',refresh_token:'r',expires_in:3600,user:{id:UID,email:'a@b.nl'}}));
+  const s=await a.t.authSignIn('a@b.nl','wachtwoord');
+  assert.strictEqual(s.user.id,UID);assert.ok(calls[0].url.includes('/auth/v1/token?grant_type=password'));
+  assert.strictEqual(JSON.parse(a.ls.data[a.t.AUTH_KEY]).access_token,'t');
+});
+test('sessie: foute inlog geeft melding en bewaart niets',async()=>{
+  const a=createApp();mockFetch(a,()=>res({error_description:'Invalid login credentials'},400));
+  await assert.rejects(()=>a.t.authSignIn('a@b.nl','x'),/Invalid login credentials/);
+  assert.strictEqual(a.ls.data[a.t.AUTH_KEY],undefined);
+});
+test('sessie: registratie zonder directe sessie (e-mailbevestiging) geeft null',async()=>{
+  const a=createApp();mockFetch(a,()=>res({id:UID,email:'a@b.nl'}));
+  assert.strictEqual(await a.t.authSignUp('a@b.nl','wachtwoord'),null);assert.strictEqual(a.ls.data[a.t.AUTH_KEY],undefined);
+});
+test('sessie: verlopen token wordt ververst',async()=>{
+  const a=createApp();login(a,{...SESSION,expires_at:Date.now()-1000});
+  const calls=mockFetch(a,c=>c.url.includes('refresh_token')?res({access_token:'nieuw',refresh_token:'r2',expires_in:3600,user:{id:UID}}):res({id:UID}));
+  const s=await a.t.ensureSession();
+  assert.strictEqual(s.access_token,'nieuw');assert.ok(calls[0].url.includes('grant_type=refresh_token'));
+});
+test('sessie: verversen mislukt -> sessie gewist, melding "verlopen"; lokale data blijft',async()=>{
+  const a=createApp();login(a,{...SESSION,expires_at:Date.now()-1000});
+  mockFetch(a,()=>res({error_description:'bad'},400));
+  const before=JSON.stringify(a.t.state);
+  await assert.rejects(()=>a.t.ensureSession(),/verlopen/);
+  assert.strictEqual(a.ls.data[a.t.AUTH_KEY],undefined);assert.strictEqual(JSON.stringify(a.t.state),before);
+});
+test('sessie: netwerkfout bij verversen behoudt sessie',async()=>{
+  const a=createApp();login(a,{...SESSION,expires_at:Date.now()-1000});
+  a.sandbox.fetch=async()=>{throw new TypeError('offline')};
+  await assert.rejects(()=>a.t.ensureSession(),/Geen verbinding/);
+  assert.ok(a.ls.data[a.t.AUTH_KEY]);
+});
+test('sessie: user-verificatie met andere id wist sessie',async()=>{
+  const a=createApp();login(a);mockFetch(a,()=>res({id:'99999999-2222-3333-4444-555555555555'}));
+  await assert.rejects(()=>a.t.ensureSession(),/komt niet overeen/);assert.strictEqual(a.ls.data[a.t.AUTH_KEY],undefined);
+});
+test('sessie: uitloggen wist sessie ook bij netwerkfout en laat lokale data intact',async()=>{
+  const a=createApp();login(a);a.sandbox.fetch=async()=>{throw new TypeError('offline')};
+  const before=JSON.stringify(a.t.state);await a.t.authSignOut();
+  assert.strictEqual(a.ls.data[a.t.AUTH_KEY],undefined);assert.strictEqual(JSON.stringify(a.t.state),before);
+});
+test('sessie: ongeldige opgeslagen sessie (geen UUID) wordt genegeerd',()=>{
+  const a=createApp();login(a,{...SESSION,user:{id:'zelf-gekozen'}});assert.strictEqual(a.t.getAuthSession(),null);
+});
+test('fouten: 401 wist sessie; 403 en netwerkfout geven begrijpelijke melding',async()=>{
+  let a=createApp();login(a);mockFetch(a,()=>res('jwt expired',401));
+  await assert.rejects(()=>a.t.fetchCloudCopy(S,SESSION),/sessie is verlopen/);assert.strictEqual(a.ls.data[a.t.AUTH_KEY],undefined);
+  a=createApp();mockFetch(a,()=>res('x',403));await assert.rejects(()=>a.t.fetchCloudCopy(S,SESSION),/Geen toegang/);
+  a=createApp();a.sandbox.fetch=async()=>{throw new TypeError('x')};await assert.rejects(()=>a.t.fetchCloudCopy(S,SESSION),/Geen verbinding/);
+});
+test('fouten: verkeerde versleutelingssleutel geeft melding en niets wordt overschreven',async()=>{
+  const a=createApp(),payload=await a.t.encryptData(a.t.normalizedStateCopy(a.t.state),'andere');
+  const calls=mockFetch(a,()=>res([{payload,updated_at:'2026-01-01T00:00:00.000Z'}]));
+  await assert.rejects(()=>a.t.fetchCloudCopy(S,SESSION),/ontsleuteld/);
+  assert.ok(calls.every(c=>c.method==='GET'));
 });
 test('encryptie round-trip en verkeerde sleutel faalt',async()=>{
   const a=createApp(),p=await a.t.encryptData({a:1},'x');
