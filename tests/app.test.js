@@ -94,3 +94,19 @@ test('encryptie round-trip en verkeerde sleutel faalt',async()=>{
   assert.deepStrictEqual(await a.t.decryptData(p,'x'),{a:1});
   await assert.rejects(()=>a.t.decryptData(p,'y'));
 });
+
+test('kennisbank: niet-doorzoekbare PDF wordt niet als doorzoekbaar behandeld en geeft geen treffers',()=>{
+  const a=createApp(),idx=a.t.vc2Index();
+  idx['scan.pdf']={fileName:'scan.pdf',indexedAt:'2026-01-01',pages:['',''],searchable:false};
+  idx['tekst.pdf']={fileName:'tekst.pdf',indexedAt:'2026-01-01',pages:['Hoog drukzetten begint bij een pressing trigger na een slechte steunpass.']};
+  assert.strictEqual(a.t.vc2IsSearchable(idx['scan.pdf']),false);
+  assert.strictEqual(a.t.vc2IsSearchable(idx['tekst.pdf']),true);
+  const hits=a.t.vc2Passages('drukzetten trigger');
+  assert.ok(hits.length&&hits.every(h=>h.name==='tekst.pdf'&&h.page===1));
+});
+test('spelprincipe met nieuwe velden blijft valide en wordt bewaard',()=>{
+  const a=createApp();a.t.state.gameModel.principles.push({id:'p1',name:'Hoog drukzetten',recognizableSituations:'x',commonMistakes:['te ver uit elkaar']});
+  a.t.save({render:false,sync:false});
+  const p=JSON.parse(a.ls.data['footballCoachDataV2']).gameModel.principles[0];
+  assert.deepStrictEqual(p.commonMistakes,['te ver uit elkaar']);
+});
