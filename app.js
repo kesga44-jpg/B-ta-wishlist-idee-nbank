@@ -432,7 +432,7 @@ function save({render=true,sync=true,skipUndo=false,activity=null}={}){
   state.meta.updatedAt=new Date().toISOString();
   logActivity(activity||`${pageInfo()?.[0]||'App'} aangepast`);
   recordValueSnapshots();
-  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}catch(e){const lbl=$('#saveStateLabel');if(lbl)lbl.textContent='Opslaan mislukt';toast('Opslaan mislukt: '+(e&&e.name==='QuotaExceededError'?'lokale opslag is vol. Maak een back-up en ruim ruimte op.':(e&&e.message||'onbekende fout')));return false}
   autoBackupMaybe();
   const lbl=$('#saveStateLabel');if(lbl)lbl.textContent='Opgeslagen '+new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
   updateUndoButton();updateConnectionStatus();
